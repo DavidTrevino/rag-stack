@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+qdrant-client
+neo4j
+sentence-transformers
+requests
+beautifulsoup4
+newspaper3k
+networkx
