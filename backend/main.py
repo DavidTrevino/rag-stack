@@ -92,8 +92,8 @@ def ingest_url(url: str):
 def query(q: str):
     hits = qdrant.search_points(
         collection_name=COLLECTION,
-        query_vector=embed(q),
-        limit=3
+        query_vector=vector,
+        limit=5
     )
 
     context = "\n".join([h.payload["text"] for h in hits])
