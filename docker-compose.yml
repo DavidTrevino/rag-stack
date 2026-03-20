@@ -16,6 +16,7 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    restart: unless-stopped
 
   neo4j:
     image: neo4j:5
@@ -27,6 +28,7 @@ services:
       - NEO4J_AUTH=neo4j/password
     volumes:
       - neo4j_data:/data
+    restart: unless-stopped
 
   backend:
     build: ./backend
@@ -40,6 +42,7 @@ services:
     volumes:
       - ./data:/data
       - /mnt/docs:/mnt/docs
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
@@ -48,6 +51,7 @@ services:
       - backend
     ports:
       - "8501:8501"
+    restart: unless-stopped
 
 volumes:
   ollama_data:
