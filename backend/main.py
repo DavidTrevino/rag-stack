@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance, OptimizersConfigDiff
 from neo4j import GraphDatabase
 from sentence_transformers import SentenceTransformer
 import requests
@@ -56,11 +57,15 @@ def ingest_local():
             "payload": {"text": doc}
         })
 
+#    qdrant.recreate_collection(
+#        collection_name=COLLECTION,
+#        vectors_config={"size": len(points[0]["vector"]), "distance": "Cosine"}
+#    )
     qdrant.recreate_collection(
-        collection_name=COLLECTION,
-        vectors_config={"size": len(points[0]["vector"]), "distance": "Cosine"}
+        collection_name="docs",
+        vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+        optimizers_config=OptimizersConfigDiff(indexing_threshold=0)
     )
-
     qdrant.upsert(collection_name=COLLECTION, points=points)
 
     return {"status": "local docs ingested", "count": len(points)}
