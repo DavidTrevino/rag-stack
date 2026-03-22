@@ -99,7 +99,7 @@ def ingest_url(url: str):
 def query(q: str):
     query_vector = embed(q)
 
-    hits = qdrant.search(
+    hits = qdrant.search_points(
         collection_name=COLLECTION,
         query_vector=query_vector,
         limit=5
