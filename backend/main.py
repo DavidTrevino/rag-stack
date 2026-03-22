@@ -18,11 +18,21 @@ neo4j_driver = GraphDatabase.driver(
 )
 
 OLLAMA_URL = "http://ollama:11434/api/generate"
-
 COLLECTION = "docs"
 
-# --- Helpers ---
+# --- Ensure collection exists (RUN ON STARTUP) ---
+@app.on_event("startup")
+def setup_collection():
+    collections = [c.name for c in qdrant.get_collections().collections]
 
+    if COLLECTION not in collections:
+        qdrant.create_collection(
+            collection_name=COLLECTION,
+            vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+            optimizers_config=OptimizersConfigDiff(indexing_threshold=0)
+        )
+
+# --- Helpers ---
 def embed(text):
     return model.encode(text).tolist()
 
@@ -35,10 +45,10 @@ def ollama_generate(prompt):
     return r.json()["response"]
 
 # --- Ingest local docs ---
-
 @app.post("/ingest/local")
 def ingest_local():
     docs = []
+
     for root, _, files in os.walk("/mnt/docs"):
         for f in files:
             path = os.path.join(root, f)
@@ -51,40 +61,33 @@ def ingest_local():
 
     points = []
     for i, doc in enumerate(docs):
+        vector = embed(doc)
+
         points.append({
             "id": i,
-            "vector": embed(doc),
+            "vector": vector,
             "payload": {"text": doc}
         })
 
-#    qdrant.recreate_collection(
-#        collection_name=COLLECTION,
-#        vectors_config={"size": len(points[0]["vector"]), "distance": "Cosine"}
-#    )
-    qdrant.recreate_collection(
-        collection_name="docs",
-        vectors_config=VectorParams(size=384, distance=Distance.COSINE),
-        optimizers_config=OptimizersConfigDiff(indexing_threshold=0)
-    )
-    qdrant.upsert(collection_name=COLLECTION, points=points)
+    if points:
+        qdrant.upsert(collection_name=COLLECTION, points=points)
 
     return {"status": "local docs ingested", "count": len(points)}
 
 # --- Ingest URL ---
-
 @app.post("/ingest/url")
 def ingest_url(url: str):
     html = requests.get(url).text
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text()
 
-    vec = embed(text[:2000])
+    vector = embed(text[:2000])
 
     qdrant.upsert(
         collection_name=COLLECTION,
         points=[{
             "id": 9999,
-            "vector": vec,
+            "vector": vector,
             "payload": {"text": text[:2000]}
         }]
     )
@@ -92,37 +95,36 @@ def ingest_url(url: str):
     return {"status": "url ingested"}
 
 # --- Query RAG ---
-
 @app.get("/query")
 def query(q: str):
-    hits = qdrant.search_points(
+    query_vector = embed(q)
+
+    hits = qdrant.search(
         collection_name=COLLECTION,
-        query_vector=vector,
+        query_vector=query_vector,
         limit=5
     )
 
     context = "\n".join([h.payload["text"] for h in hits])
 
     prompt = f"""
-    Context:
-    {context}
+Context:
+{context}
 
-    Question:
-    {q}
-    """
+Question:
+{q}
+"""
 
     answer = ollama_generate(prompt)
 
     return {"answer": answer, "context": context}
 
-# --- Graph extraction (simple) ---
-
+# --- Graph extraction ---
 @app.post("/graph/extract")
 def extract_graph():
     with neo4j_driver.session() as session:
         session.run("MATCH (n) DETACH DELETE n")
 
-        # simple example node
         session.run("""
         MERGE (a:Topic {name:"AI"})
         MERGE (b:Topic {name:"Health"})
@@ -132,7 +134,6 @@ def extract_graph():
     return {"status": "graph created"}
 
 # --- Graph query ---
-
 @app.get("/graph")
 def get_graph():
     with neo4j_driver.session() as session:
