@@ -97,7 +97,7 @@ def ingest_url(url: str):
 # --- Query RAG ---
 @app.get("/query")
 def query(q: str):
-    query_vector = embed(q)
+    vector = embed(q)
 
     hits = qdrant.search_points(
         collection_name=COLLECTION,
